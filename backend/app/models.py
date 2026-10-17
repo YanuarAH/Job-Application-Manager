@@ -28,3 +28,12 @@ class Job(Base):
     analysis_source: Mapped[str | None] = mapped_column(
         String(30), nullable=True, default=None
     )
+
+
+class CandidateProfile(Base):
+    __tablename__ = "candidate_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(150), default="")
+    headline: Mapped[str] = mapped_column(String(200), default="")
+    skills: Mapped[list[str]] = mapped_column(JSON, default=list)

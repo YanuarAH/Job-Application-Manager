@@ -4,8 +4,10 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Job
-from app.schemas import JobCreate, JobResponse, JobUpdate
+from app.routers.profile import get_or_create_profile
+from app.schemas import JobCreate, JobResponse, JobUpdate, SkillMatchResult
 from app.services.analyzer import analyze_job_description
+from app.services.matcher import calculate_skill_match
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -94,6 +96,31 @@ def analyze_job(job_id: int, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.get("/{job_id}/match", response_model=SkillMatchResult)
+def match_job_skills(job_id: int, db: Session = Depends(get_db)):
+    job = db.get(Job, job_id)
+
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    if job.required_skills is None and job.preferred_skills is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Job belum dianalisis. Jalankan analisis AI terlebih dahulu.",
+        )
+
+    profile = get_or_create_profile(db)
+    return calculate_skill_match(
+        job_id=job.id,
+        candidate_skills=profile.skills or [],
+        required_skills=job.required_skills,
+        preferred_skills=job.preferred_skills,
+    )
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
