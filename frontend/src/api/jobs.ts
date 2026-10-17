@@ -23,6 +23,12 @@ export function updateJob(id: number, payload: JobUpdate) {
   });
 }
 
+export function analyzeJob(id: number) {
+  return request<Job>(`/jobs/${id}/analyze`, {
+    method: "POST",
+  });
+}
+
 export function deleteJob(id: number) {
   return request<void>(`/jobs/${id}`, { method: "DELETE" });
 }

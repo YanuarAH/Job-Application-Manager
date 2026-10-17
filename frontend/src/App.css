@@ -219,6 +219,16 @@ h3 {
   background: #fee2e2;
 }
 
+.btn-ai {
+  background: #eef2ff;
+  border-color: #c7d2fe;
+  color: #4338ca;
+}
+
+.btn-ai:hover:not(:disabled) {
+  background: #e0e7ff;
+}
+
 .link-button {
   padding: 0;
   border: none;
@@ -252,8 +262,16 @@ h3 {
   gap: 16px;
 }
 
+.job-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .job-item-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
 }
@@ -279,6 +297,104 @@ h3 {
 
 .job-description.expanded {
   display: block;
+}
+
+/* AI Analysis Panel */
+.analysis-panel {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e0e7ff;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.analysis-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #4338ca;
+}
+
+.analysis-summary {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #334155;
+}
+
+.skills-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.skills-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.skills-empty {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.skill-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skill-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.skill-required {
+  background: #eef2ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+}
+
+.skill-preferred {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.badge-level {
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #334155;
+}
+
+.badge-source {
+  background: #ede9fe;
+  color: #5b21b6;
 }
 
 .empty-state {

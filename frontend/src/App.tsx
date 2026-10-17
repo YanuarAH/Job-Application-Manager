@@ -53,7 +53,8 @@ function App() {
         setIsConnected(false);
       });
 
-    jobsApi.listJobs()
+    jobsApi
+      .listJobs()
       .then((data) => {
         setJobs(data);
         setError(null);
@@ -78,6 +79,20 @@ function App() {
     setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
     setEditingJob(null);
     showNotice("Job berhasil diperbarui.");
+  }
+
+  async function handleAnalyze(job: Job) {
+    try {
+      const analyzed = await jobsApi.analyzeJob(job.id);
+      setJobs((prev) =>
+        prev.map((j) => (j.id === analyzed.id ? analyzed : j)),
+      );
+      showNotice(`Analisis AI selesai (${analyzed.analysis_source}).`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Gagal menganalisis job.",
+      );
+    }
   }
 
   async function handleDelete(job: Job) {
@@ -115,7 +130,6 @@ function App() {
       <div className="layout">
         <aside>
           <JobForm
-            // key memaksa form di-reset saat berganti mode tambah/edit
             key={editingJob ? `edit-${editingJob.id}` : "create"}
             initialJob={editingJob}
             onSubmit={editingJob ? handleUpdate : handleCreate}
@@ -153,6 +167,7 @@ function App() {
               setEditingJob(job);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
+            onAnalyze={handleAnalyze}
             onDelete={handleDelete}
           />
         </section>
