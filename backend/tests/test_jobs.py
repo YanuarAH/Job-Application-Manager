@@ -1,4 +1,7 @@
+import pytest
 from fastapi.testclient import TestClient
+
+from app.config import settings
 
 
 def test_root_and_health(client: TestClient) -> None:
@@ -24,6 +27,8 @@ def test_create_and_get_job(client: TestClient) -> None:
     assert created["company_name"] == payload["company_name"]
     assert created["job_title"] == payload["job_title"]
     assert created["job_description"] == payload["job_description"]
+    assert created["required_skills"] is None
+    assert created["analysis_source"] is None
 
     get_res = client.get(f"/jobs/{created['id']}")
     assert get_res.status_code == 200
@@ -114,3 +119,37 @@ def test_job_not_found_errors(client: TestClient) -> None:
         == 404
     )
     assert client.delete("/jobs/999").status_code == 404
+    assert client.post("/jobs/999/analyze").status_code == 404
+
+
+def test_analyze_job_with_rule_based_fallback(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+    create_res = client.post(
+        "/jobs",
+        json={
+            "company_name": "DataLab",
+            "job_title": "AI Engineer Intern",
+            "job_description": (
+                "We are looking for an AI Engineer Intern who knows Python, "
+                "FastAPI, and PostgreSQL.\n"
+                "Preferred qualifications: experience with Docker and PyTorch."
+            ),
+        },
+    )
+    job_id = create_res.json()["id"]
+
+    analyze_res = client.post(f"/jobs/{job_id}/analyze")
+    assert analyze_res.status_code == 200
+    analyzed = analyze_res.json()
+
+    assert analyzed["analysis_source"] == "rule_based"
+    assert "Python" in analyzed["required_skills"]
+    assert "FastAPI" in analyzed["required_skills"]
+    assert "PostgreSQL" in analyzed["required_skills"]
+    assert "Docker" in analyzed["preferred_skills"]
+    assert "PyTorch" in analyzed["preferred_skills"]
+    assert analyzed["experience_level"] == "Intern"
+    assert analyzed["summary"]

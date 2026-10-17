@@ -1,4 +1,3 @@
-
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -14,10 +13,36 @@ class JobUpdate(BaseModel):
     job_description: str | None = Field(default=None, min_length=1)
 
 
+class JobAnalysisResult(BaseModel):
+    """Skema terstruktur yang dikembalikan oleh LLM / fallback analyzer."""
+
+    required_skills: list[str] = Field(
+        default_factory=list,
+        description="Daftar skill teknis atau non-teknis yang wajib dimiliki kandidat.",
+    )
+    preferred_skills: list[str] = Field(
+        default_factory=list,
+        description="Daftar skill tambahan (nice-to-have / plus) jika disebutkan.",
+    )
+    experience_level: str = Field(
+        default="Not specified",
+        description="Tingkat pengalaman: Intern, Entry Level, Mid Level, Senior, atau Not specified.",
+    )
+    summary: str = Field(
+        default="",
+        description="Ringkasan singkat (1-2 kalimat) mengenai fokus utama peran ini.",
+    )
+
+
 class JobResponse(BaseModel):
     id: int
     company_name: str
     job_title: str
     job_description: str
+    required_skills: list[str] | None = None
+    preferred_skills: list[str] | None = None
+    experience_level: str | None = None
+    summary: str | None = None
+    analysis_source: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
