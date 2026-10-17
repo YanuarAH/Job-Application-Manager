@@ -1,122 +1,164 @@
-import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
+import "./App.css";
+import { getHealth } from "./api/client";
+import * as jobsApi from "./api/jobs";
+import JobForm from "./components/JobForm";
+import JobList from "./components/JobList";
+import type { Job, JobCreate } from "./types/job";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [status, setStatus] = useState("Memeriksa koneksi...");
+  const [isConnected, setIsConnected] = useState(false);
+
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [editingJob, setEditingJob] = useState<Job | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const showNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(null), 2500);
+  };
+
+  // Menerapkan hasil request daftar job ke state
+  const applyJobsResult = (promise: Promise<Job[]>) =>
+    promise
+      .then((data) => {
+        setJobs(data);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        setError(
+          err instanceof Error ? err.message : "Gagal memuat data job.",
+        );
+      })
+      .finally(() => setIsLoading(false));
+
+  // Dipanggil dari tombol Refresh / Coba lagi
+  const loadJobs = () => {
+    setIsLoading(true);
+    setError(null);
+    applyJobsResult(jobsApi.listJobs());
+  };
+
+  useEffect(() => {
+    getHealth()
+      .then((data) => {
+        setStatus(data.status);
+        setIsConnected(true);
+      })
+      .catch(() => {
+        setStatus("Backend belum terhubung");
+        setIsConnected(false);
+      });
+
+    jobsApi.listJobs()
+      .then((data) => {
+        setJobs(data);
+        setError(null);
+      })
+      .catch((err: unknown) => {
+        setError(
+          err instanceof Error ? err.message : "Gagal memuat data job.",
+        );
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  async function handleCreate(payload: JobCreate) {
+    const created = await jobsApi.createJob(payload);
+    setJobs((prev) => [created, ...prev]);
+    showNotice("Job berhasil ditambahkan.");
+  }
+
+  async function handleUpdate(payload: JobCreate) {
+    if (!editingJob) return;
+    const updated = await jobsApi.updateJob(editingJob.id, payload);
+    setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+    setEditingJob(null);
+    showNotice("Job berhasil diperbarui.");
+  }
+
+  async function handleDelete(job: Job) {
+    try {
+      await jobsApi.deleteJob(job.id);
+      setJobs((prev) => prev.filter((j) => j.id !== job.id));
+      if (editingJob?.id === job.id) {
+        setEditingJob(null);
+      }
+      showNotice("Job berhasil dihapus.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menghapus job.");
+    }
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
+    <main className="container">
+      <header className="page-header">
         <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
+          <p className="eyebrow">JOB APPLICATION MANAGER</p>
+          <h1>Manage your job search.</h1>
+          <p className="description">
+            Organize job applications, analyze requirements,
+            and understand your skill gaps in one place.
           </p>
         </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+        <div className="status-pill">
+          <span className={`dot ${isConnected ? "success" : "pending"}`} />
+          Backend: <strong>{status}</strong>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+      </header>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+      {notice && <div className="toast">{notice}</div>}
+
+      <div className="layout">
+        <aside>
+          <JobForm
+            // key memaksa form di-reset saat berganti mode tambah/edit
+            key={editingJob ? `edit-${editingJob.id}` : "create"}
+            initialJob={editingJob}
+            onSubmit={editingJob ? handleUpdate : handleCreate}
+            onCancel={editingJob ? () => setEditingJob(null) : undefined}
+          />
+        </aside>
+
+        <section>
+          <div className="section-header">
+            <h2>Daftar Job ({jobs.length})</h2>
+            <button
+              type="button"
+              className="btn btn-small btn-secondary"
+              onClick={loadJobs}
+              disabled={isLoading}
+            >
+              Refresh
+            </button>
+          </div>
+
+          {error && (
+            <div className="alert">
+              <span>{error}</span>
+              <button type="button" className="link-button" onClick={loadJobs}>
+                Coba lagi
+              </button>
+            </div>
+          )}
+
+          <JobList
+            jobs={jobs}
+            isLoading={isLoading}
+            editingId={editingJob?.id ?? null}
+            onEdit={(job) => {
+              setEditingJob(job);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            onDelete={handleDelete}
+          />
+        </section>
+      </div>
+    </main>
+  );
 }
 
-export default App
+export default App;
