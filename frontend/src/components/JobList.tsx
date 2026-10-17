@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { Job } from "../types/job";
+import { calculateSkillMatch } from "../utils/matcher";
 
 interface JobListProps {
   jobs: Job[];
+  candidateSkills: string[];
   isLoading: boolean;
   editingId: number | null;
   onEdit: (job: Job) => void;
@@ -10,8 +12,15 @@ interface JobListProps {
   onDelete: (job: Job) => Promise<void>;
 }
 
+function getScoreTier(score: number): "high" | "medium" | "low" {
+  if (score >= 75) return "high";
+  if (score >= 45) return "medium";
+  return "low";
+}
+
 function JobList({
   jobs,
+  candidateSkills,
   isLoading,
   editingId,
   onEdit,
@@ -61,6 +70,15 @@ function JobList({
         const isExpanded = expandedId === job.id;
         const isAnalyzing = analyzingId === job.id;
         const hasAnalysis = Boolean(job.analysis_source);
+        const match = hasAnalysis
+          ? calculateSkillMatch(
+              job.id,
+              candidateSkills,
+              job.required_skills,
+              job.preferred_skills,
+            )
+          : null;
+        const scoreTier = match ? getScoreTier(match.match_score) : "low";
 
         return (
           <li
@@ -124,10 +142,12 @@ function JobList({
               </button>
             )}
 
-            {hasAnalysis && (
+            {hasAnalysis && match && (
               <div className="analysis-panel">
                 <div className="analysis-header">
-                  <span className="analysis-title">AI Job Analysis</span>
+                  <span className="analysis-title">
+                    AI Job Analysis & Skill Match
+                  </span>
                   <span className="badge badge-source">
                     {job.analysis_source === "gemini"
                       ? "Gemini AI"
@@ -139,33 +159,83 @@ function JobList({
                   <p className="analysis-summary">{job.summary}</p>
                 )}
 
-                <div className="skills-section">
-                  <span className="skills-label">Required Skills:</span>
-                  {job.required_skills && job.required_skills.length > 0 ? (
-                    <div className="skill-tags">
-                      {job.required_skills.map((skill) => (
-                        <span key={skill} className="skill-tag skill-required">
-                          {skill}
-                        </span>
-                      ))}
+                <div className="match-box">
+                  <div className="match-header">
+                    <div>
+                      <span className="match-label">Skill Match Score</span>
+                      <span className="match-formula">{match.formula_note}</span>
                     </div>
-                  ) : (
-                    <span className="skills-empty">Tidak terdeteksi</span>
-                  )}
+                    <span className={`match-score score-${scoreTier}`}>
+                      {match.match_score}%
+                    </span>
+                  </div>
+                  <div className="match-bar-track">
+                    <div
+                      className={`match-bar-fill fill-${scoreTier}`}
+                      style={{ width: `${match.match_score}%` }}
+                    />
+                  </div>
                 </div>
 
-                {job.preferred_skills && job.preferred_skills.length > 0 && (
+                <div className="skills-grid">
                   <div className="skills-section">
-                    <span className="skills-label">Preferred Skills:</span>
-                    <div className="skill-tags">
-                      {job.preferred_skills.map((skill) => (
-                        <span key={skill} className="skill-tag skill-preferred">
-                          {skill}
-                        </span>
-                      ))}
-                    </div>
+                    <span className="skills-label">
+                      Matched Skills ({match.matched_required.length + match.matched_preferred.length}):
+                    </span>
+                    {match.matched_required.length +
+                      match.matched_preferred.length >
+                    0 ? (
+                      <div className="skill-tags">
+                        {match.matched_required.map((skill) => (
+                          <span key={skill} className="skill-tag skill-matched">
+                            ✓ {skill}
+                          </span>
+                        ))}
+                        {match.matched_preferred.map((skill) => (
+                          <span
+                            key={skill}
+                            className="skill-tag skill-preferred"
+                          >
+                            ✓ {skill} (Plus)
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="skills-empty">
+                        Belum ada skill di profil yang cocok.
+                      </span>
+                    )}
                   </div>
-                )}
+
+                  <div className="skills-section">
+                    <span className="skills-label">
+                      Skill Gap — Perlu Dipelajari ({match.missing_required.length + match.missing_preferred.length}):
+                    </span>
+                    {match.missing_required.length +
+                      match.missing_preferred.length >
+                    0 ? (
+                      <div className="skill-tags">
+                        {match.missing_required.map((skill) => (
+                          <span key={skill} className="skill-tag skill-gap">
+                            ! {skill} (Wajib)
+                          </span>
+                        ))}
+                        {match.missing_preferred.map((skill) => (
+                          <span
+                            key={skill}
+                            className="skill-tag skill-gap-optional"
+                          >
+                            + {skill} (Plus)
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="skills-empty">
+                        Semua skill yang dibutuhkan sudah Anda miliki!
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </li>

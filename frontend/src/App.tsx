@@ -2,14 +2,21 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import { getHealth } from "./api/client";
 import * as jobsApi from "./api/jobs";
+import * as profileApi from "./api/profile";
 import JobForm from "./components/JobForm";
 import JobList from "./components/JobList";
+import ProfileCard from "./components/ProfileCard";
 import type { Job, JobCreate } from "./types/job";
+import type {
+  CandidateProfile,
+  CandidateProfileUpdate,
+} from "./types/profile";
 
 function App() {
   const [status, setStatus] = useState("Memeriksa koneksi...");
   const [isConnected, setIsConnected] = useState(false);
 
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +60,13 @@ function App() {
         setIsConnected(false);
       });
 
+    profileApi
+      .getProfile()
+      .then((data) => setProfile(data))
+      .catch(() => {
+        // Jika profil gagal dimuat, tetap izinkan daftar job tampil
+      });
+
     jobsApi
       .listJobs()
       .then((data) => {
@@ -66,6 +80,12 @@ function App() {
       })
       .finally(() => setIsLoading(false));
   }, []);
+
+  async function handleSaveProfile(payload: CandidateProfileUpdate) {
+    const updated = await profileApi.updateProfile(payload);
+    setProfile(updated);
+    showNotice("Profil & skill berhasil disimpan.");
+  }
 
   async function handleCreate(payload: JobCreate) {
     const created = await jobsApi.createJob(payload);
@@ -128,7 +148,13 @@ function App() {
       {notice && <div className="toast">{notice}</div>}
 
       <div className="layout">
-        <aside>
+        <aside className="sidebar-stack">
+          <ProfileCard
+            key={profile ? `profile-${profile.id}-${profile.skills.join(",")}` : "profile-loading"}
+            profile={profile}
+            onSave={handleSaveProfile}
+          />
+
           <JobForm
             key={editingJob ? `edit-${editingJob.id}` : "create"}
             initialJob={editingJob}
@@ -161,6 +187,7 @@ function App() {
 
           <JobList
             jobs={jobs}
+            candidateSkills={profile?.skills ?? []}
             isLoading={isLoading}
             editingId={editingJob?.id ?? null}
             onEdit={(job) => {
