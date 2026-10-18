@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import type { Job, JobCreate } from "../types/job";
+import {
+  APPLICATION_STATUSES,
+  type ApplicationStatus,
+  type Job,
+  type JobCreate,
+} from "../types/job";
 
 interface JobFormProps {
   initialJob?: Job | null;
@@ -12,6 +17,8 @@ const emptyForm: JobCreate = {
   company_name: "",
   job_title: "",
   job_description: "",
+  application_status: "Saved",
+  notes: "",
 };
 
 function JobForm({ initialJob, onSubmit, onCancel }: JobFormProps) {
@@ -21,6 +28,8 @@ function JobForm({ initialJob, onSubmit, onCancel }: JobFormProps) {
           company_name: initialJob.company_name,
           job_title: initialJob.job_title,
           job_description: initialJob.job_description,
+          application_status: initialJob.application_status ?? "Saved",
+          notes: initialJob.notes ?? "",
         }
       : emptyForm,
   );
@@ -29,7 +38,10 @@ function JobForm({ initialJob, onSubmit, onCancel }: JobFormProps) {
 
   const isEditing = Boolean(initialJob);
 
-  function updateField(field: keyof JobCreate, value: string) {
+  function updateField<K extends keyof JobCreate>(
+    field: K,
+    value: JobCreate[K],
+  ) {
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
@@ -41,10 +53,12 @@ function JobForm({ initialJob, onSubmit, onCancel }: JobFormProps) {
       company_name: form.company_name.trim(),
       job_title: form.job_title.trim(),
       job_description: form.job_description.trim(),
+      application_status: form.application_status ?? "Saved",
+      notes: form.notes?.trim() ? form.notes.trim() : null,
     };
 
     if (!payload.company_name || !payload.job_title || !payload.job_description) {
-      setError("Semua field wajib diisi.");
+      setError("Nama perusahaan, posisi, dan deskripsi wajib diisi.");
       return;
     }
 
@@ -88,12 +102,41 @@ function JobForm({ initialJob, onSubmit, onCancel }: JobFormProps) {
       </label>
 
       <label>
+        <span>Status Lamaran</span>
+        <select
+          value={form.application_status ?? "Saved"}
+          onChange={(e) =>
+            updateField(
+              "application_status",
+              e.target.value as ApplicationStatus,
+            )
+          }
+        >
+          {APPLICATION_STATUSES.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label>
         <span>Job Description</span>
         <textarea
-          rows={6}
+          rows={5}
           value={form.job_description}
           placeholder="Tempel deskripsi pekerjaan di sini..."
           onChange={(e) => updateField("job_description", e.target.value)}
+        />
+      </label>
+
+      <label>
+        <span>Catatan / Notes (opsional)</span>
+        <textarea
+          rows={2}
+          value={form.notes ?? ""}
+          placeholder="contoh: Jadwal interview Jumat 14.00, link lowongan, kontak HR..."
+          onChange={(e) => updateField("notes", e.target.value)}
         />
       </label>
 

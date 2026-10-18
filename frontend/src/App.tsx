@@ -6,11 +6,19 @@ import * as profileApi from "./api/profile";
 import JobForm from "./components/JobForm";
 import JobList from "./components/JobList";
 import ProfileCard from "./components/ProfileCard";
-import type { Job, JobCreate } from "./types/job";
+import {
+  APPLICATION_STATUSES,
+  type ApplicationStatus,
+  type Job,
+  type JobCreate,
+} from "./types/job";
 import type {
   CandidateProfile,
   CandidateProfileUpdate,
 } from "./types/profile";
+import { calculateSkillMatch } from "./utils/matcher";
+
+type SortMode = "newest" | "match_desc";
 
 function App() {
   const [status, setStatus] = useState("Memeriksa koneksi...");
@@ -18,6 +26,10 @@ function App() {
 
   const [profile, setProfile] = useState<CandidateProfile | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [statusFilter, setStatusFilter] = useState<ApplicationStatus | "All">(
+    "All",
+  );
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
@@ -101,6 +113,20 @@ function App() {
     showNotice("Job berhasil diperbarui.");
   }
 
+  async function handleStatusChange(job: Job, nextStatus: ApplicationStatus) {
+    try {
+      const updated = await jobsApi.updateJob(job.id, {
+        application_status: nextStatus,
+      });
+      setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+      showNotice(`Status diubah ke ${nextStatus}.`);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Gagal memperbarui status.",
+      );
+    }
+  }
+
   async function handleAnalyze(job: Job) {
     try {
       const analyzed = await jobsApi.analyzeJob(job.id);
@@ -128,6 +154,47 @@ function App() {
     }
   }
 
+  const candidateSkills = profile?.skills ?? [];
+
+  const statusCounts = APPLICATION_STATUSES.reduce(
+    (acc, s) => {
+      acc[s] = jobs.filter(
+        (j) => (j.application_status ?? "Saved") === s,
+      ).length;
+      return acc;
+    },
+    {} as Record<ApplicationStatus, number>,
+  );
+
+  const visibleJobs = [...jobs]
+    .filter((job) =>
+      statusFilter === "All"
+        ? true
+        : (job.application_status ?? "Saved") === statusFilter,
+    )
+    .sort((a, b) => {
+      if (sortMode === "match_desc") {
+        const scoreA = a.analysis_source
+          ? calculateSkillMatch(
+              a.id,
+              candidateSkills,
+              a.required_skills,
+              a.preferred_skills,
+            ).match_score
+          : -1;
+        const scoreB = b.analysis_source
+          ? calculateSkillMatch(
+              b.id,
+              candidateSkills,
+              b.required_skills,
+              b.preferred_skills,
+            ).match_score
+          : -1;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+      }
+      return b.id - a.id;
+    });
+
   return (
     <main className="container">
       <header className="page-header">
@@ -150,7 +217,11 @@ function App() {
       <div className="layout">
         <aside className="sidebar-stack">
           <ProfileCard
-            key={profile ? `profile-${profile.id}-${profile.skills.join(",")}` : "profile-loading"}
+            key={
+              profile
+                ? `profile-${profile.id}-${profile.skills.join(",")}`
+                : "profile-loading"
+            }
             profile={profile}
             onSave={handleSaveProfile}
           />
@@ -165,15 +236,49 @@ function App() {
 
         <section>
           <div className="section-header">
-            <h2>Daftar Job ({jobs.length})</h2>
+            <h2>
+              Daftar Job ({visibleJobs.length}
+              {statusFilter !== "All" ? ` / ${jobs.length}` : ""})
+            </h2>
+            <div className="toolbar-right">
+              <select
+                aria-label="Urutkan daftar job"
+                className="sort-select"
+                value={sortMode}
+                onChange={(e) => setSortMode(e.target.value as SortMode)}
+              >
+                <option value="newest">Urutkan: Terbaru</option>
+                <option value="match_desc">Urutkan: Match Tertinggi</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn-small btn-secondary"
+                onClick={loadJobs}
+                disabled={isLoading}
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          <div className="pipeline-bar">
             <button
               type="button"
-              className="btn btn-small btn-secondary"
-              onClick={loadJobs}
-              disabled={isLoading}
+              className={`pipeline-pill ${statusFilter === "All" ? "active" : ""}`}
+              onClick={() => setStatusFilter("All")}
             >
-              Refresh
+              All <span>{jobs.length}</span>
             </button>
+            {APPLICATION_STATUSES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`pipeline-pill ${statusFilter === s ? "active" : ""}`}
+                onClick={() => setStatusFilter(s)}
+              >
+                {s} <span>{statusCounts[s]}</span>
+              </button>
+            ))}
           </div>
 
           {error && (
@@ -186,14 +291,15 @@ function App() {
           )}
 
           <JobList
-            jobs={jobs}
-            candidateSkills={profile?.skills ?? []}
+            jobs={visibleJobs}
+            candidateSkills={candidateSkills}
             isLoading={isLoading}
             editingId={editingJob?.id ?? null}
             onEdit={(job) => {
               setEditingJob(job);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
+            onStatusChange={handleStatusChange}
             onAnalyze={handleAnalyze}
             onDelete={handleDelete}
           />

@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { Job } from "../types/job";
+import {
+  APPLICATION_STATUSES,
+  type ApplicationStatus,
+  type Job,
+} from "../types/job";
 import { calculateSkillMatch } from "../utils/matcher";
 
 interface JobListProps {
@@ -8,6 +12,7 @@ interface JobListProps {
   isLoading: boolean;
   editingId: number | null;
   onEdit: (job: Job) => void;
+  onStatusChange: (job: Job, status: ApplicationStatus) => Promise<void>;
   onAnalyze: (job: Job) => Promise<void>;
   onDelete: (job: Job) => Promise<void>;
 }
@@ -24,12 +29,23 @@ function JobList({
   isLoading,
   editingId,
   onEdit,
+  onStatusChange,
   onAnalyze,
   onDelete,
 }: JobListProps) {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [analyzingId, setAnalyzingId] = useState<number | null>(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
+
+  async function handleStatusChange(job: Job, nextStatus: ApplicationStatus) {
+    setUpdatingStatusId(job.id);
+    try {
+      await onStatusChange(job, nextStatus);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  }
 
   async function handleAnalyze(job: Job) {
     setAnalyzingId(job.id);
@@ -59,7 +75,7 @@ function JobList({
   if (jobs.length === 0) {
     return (
       <p className="empty-state">
-        Belum ada job. Tambahkan job pertama Anda melalui form.
+        Tidak ada lowongan pada kategori ini.
       </p>
     );
   }
@@ -79,6 +95,7 @@ function JobList({
             )
           : null;
         const scoreTier = match ? getScoreTier(match.match_score) : "low";
+        const currentStatus = job.application_status ?? "Saved";
 
         return (
           <li
@@ -98,6 +115,24 @@ function JobList({
                 <p className="company">{job.company_name}</p>
               </div>
               <div className="job-item-actions">
+                <select
+                  aria-label={`Status lamaran ${job.job_title}`}
+                  className={`status-select status-${currentStatus.toLowerCase()}`}
+                  value={currentStatus}
+                  disabled={updatingStatusId === job.id}
+                  onChange={(e) =>
+                    handleStatusChange(
+                      job,
+                      e.target.value as ApplicationStatus,
+                    )
+                  }
+                >
+                  {APPLICATION_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
                 <button
                   type="button"
                   className="btn btn-small btn-ai"
@@ -140,6 +175,12 @@ function JobList({
               >
                 {isExpanded ? "Tampilkan lebih sedikit" : "Tampilkan selengkapnya"}
               </button>
+            )}
+
+            {job.notes && (
+              <div className="job-notes">
+                <strong>Catatan:</strong> {job.notes}
+              </div>
             )}
 
             {hasAnalysis && match && (
