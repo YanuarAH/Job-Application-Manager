@@ -12,6 +12,14 @@ class Job(Base):
     job_title: Mapped[str] = mapped_column(String(150))
     job_description: Mapped[str] = mapped_column(Text)
 
+    # Application tracking
+    application_status: Mapped[str] = mapped_column(
+        String(30), default="Saved", server_default="Saved"
+    )
+    notes: Mapped[str | None] = mapped_column(
+        Text, nullable=True, default=None
+    )
+
     # Hasil analisis AI (nullable sampai dianalisis)
     required_skills: Mapped[list[str] | None] = mapped_column(
         JSON, nullable=True, default=None

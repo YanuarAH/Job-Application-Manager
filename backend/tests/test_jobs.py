@@ -27,6 +27,8 @@ def test_create_and_get_job(client: TestClient) -> None:
     assert created["company_name"] == payload["company_name"]
     assert created["job_title"] == payload["job_title"]
     assert created["job_description"] == payload["job_description"]
+    assert created["application_status"] == "Saved"
+    assert created["notes"] is None
     assert created["required_skills"] is None
     assert created["analysis_source"] is None
 
@@ -73,7 +75,7 @@ def test_create_job_validation_error(client: TestClient) -> None:
     assert res.status_code == 422
 
 
-def test_update_job(client: TestClient) -> None:
+def test_update_job_and_application_tracking(client: TestClient) -> None:
     create_res = client.post(
         "/jobs",
         json={
@@ -86,12 +88,33 @@ def test_update_job(client: TestClient) -> None:
 
     patch_res = client.patch(
         f"/jobs/{job_id}",
-        json={"job_title": "AI Engineer"},
+        json={
+            "job_title": "AI Engineer",
+            "application_status": "Interview",
+            "notes": "Technical interview scheduled on Friday.",
+        },
     )
     assert patch_res.status_code == 200
     updated = patch_res.json()
     assert updated["job_title"] == "AI Engineer"
     assert updated["company_name"] == "Tech Inc"
+    assert updated["application_status"] == "Interview"
+    assert updated["notes"] == "Technical interview scheduled on Friday."
+
+    # Filter berdasarkan status
+    interview_list = client.get("/jobs?status_filter=Interview").json()
+    assert len(interview_list) == 1
+    assert interview_list[0]["id"] == job_id
+
+    offer_list = client.get("/jobs?status_filter=Offer").json()
+    assert len(offer_list) == 0
+
+    # Status tidak valid harus ditolak 422
+    invalid_status_res = client.patch(
+        f"/jobs/{job_id}",
+        json={"application_status": "UnknownStatus"},
+    )
+    assert invalid_status_res.status_code == 422
 
 
 def test_delete_job(client: TestClient) -> None:

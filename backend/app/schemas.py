@@ -1,16 +1,30 @@
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
+
+ApplicationStatus = Literal[
+    "Saved",
+    "Applied",
+    "Interview",
+    "Offer",
+    "Rejected",
+]
 
 
 class JobCreate(BaseModel):
     company_name: str = Field(min_length=1, max_length=150)
     job_title: str = Field(min_length=1, max_length=150)
     job_description: str = Field(min_length=1)
+    application_status: ApplicationStatus = "Saved"
+    notes: str | None = None
 
 
 class JobUpdate(BaseModel):
     company_name: str | None = Field(default=None, min_length=1, max_length=150)
     job_title: str | None = Field(default=None, min_length=1, max_length=150)
     job_description: str | None = Field(default=None, min_length=1)
+    application_status: ApplicationStatus | None = None
+    notes: str | None = None
 
 
 class JobAnalysisResult(BaseModel):
@@ -39,6 +53,8 @@ class JobResponse(BaseModel):
     company_name: str
     job_title: str
     job_description: str
+    application_status: ApplicationStatus = "Saved"
+    notes: str | None = None
     required_skills: list[str] | None = None
     preferred_skills: list[str] | None = None
     experience_level: str | None = None

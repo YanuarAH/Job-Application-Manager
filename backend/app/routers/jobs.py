@@ -5,7 +5,13 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Job
 from app.routers.profile import get_or_create_profile
-from app.schemas import JobCreate, JobResponse, JobUpdate, SkillMatchResult
+from app.schemas import (
+    ApplicationStatus,
+    JobCreate,
+    JobResponse,
+    JobUpdate,
+    SkillMatchResult,
+)
 from app.services.analyzer import analyze_job_description
 from app.services.matcher import calculate_skill_match
 
@@ -29,8 +35,14 @@ def create_job(
 
 
 @router.get("", response_model=list[JobResponse])
-def list_jobs(db: Session = Depends(get_db)):
-    statement = select(Job).order_by(Job.id.desc())
+def list_jobs(
+    status_filter: ApplicationStatus | None = None,
+    db: Session = Depends(get_db),
+):
+    statement = select(Job)
+    if status_filter is not None:
+        statement = statement.where(Job.application_status == status_filter)
+    statement = statement.order_by(Job.id.desc())
     return db.scalars(statement).all()
 
 
@@ -61,9 +73,11 @@ def update_job(
             detail="Job not found",
         )
 
-    updates = payload.model_dump(exclude_unset=True, exclude_none=True)
+    updates = payload.model_dump(exclude_unset=True)
 
     for field, value in updates.items():
+        if value is None and field != "notes":
+            continue
         setattr(job, field, value)
 
     db.commit()
