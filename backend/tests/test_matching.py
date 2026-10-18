@@ -119,3 +119,42 @@ def test_contextual_ai_assistant_fallback(
         json={"question": "Pertanyaan valid"},
     )
     assert not_found.status_code == 404
+
+
+def test_global_career_assistant_chat(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+    client.put(
+        "/profile",
+        json={
+            "full_name": "Yanuar",
+            "headline": "Fullstack & AI Engineer",
+            "skills": ["Python", "FastAPI", "React"],
+        },
+    )
+
+    create_res = client.post(
+        "/jobs",
+        json={
+            "company_name": "GoTo",
+            "job_title": "Backend Engineer",
+            "job_description": "Required: Python, FastAPI, PostgreSQL.",
+        },
+    )
+    job_id = create_res.json()["id"]
+    client.post(f"/jobs/{job_id}/analyze")
+
+    chat_res = client.post(
+        "/assistant/chat",
+        json={
+            "message": "Lowongan mana yang paling cocok untuk saya lamar?",
+            "history": [],
+        },
+    )
+    assert chat_res.status_code == 200
+    chat_data = chat_res.json()
+    assert chat_data["source"] == "rule_based"
+    assert "GoTo" in chat_data["reply"]
+    assert "PostgreSQL" in chat_data["reply"]

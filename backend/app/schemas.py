@@ -106,3 +106,22 @@ class AssistantResponse(BaseModel):
     question: str
     answer: str
     source: str
+
+
+class CareerChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class CareerChatRequest(BaseModel):
+    message: str = Field(
+        min_length=2,
+        max_length=1000,
+        description="Pesan atau pertanyaan konsultasi karier dari kandidat.",
+    )
+    history: list[CareerChatMessage] = Field(default_factory=list)
+
+
+class CareerChatResponse(BaseModel):
+    reply: str
+    source: str

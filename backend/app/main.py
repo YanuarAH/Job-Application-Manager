@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import jobs, profile
+from app.routers import assistant, jobs, profile
 
 app = FastAPI(
     title="Job Application Manager API",
@@ -35,3 +35,4 @@ def health_check():
 
 app.include_router(profile.router)
 app.include_router(jobs.router)
+app.include_router(assistant.router)
