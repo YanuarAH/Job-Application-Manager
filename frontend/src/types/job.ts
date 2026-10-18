@@ -31,3 +31,10 @@ export interface JobCreate {
 }
 
 export type JobUpdate = Partial<JobCreate>;
+
+export interface AssistantResponse {
+  job_id: number;
+  question: string;
+  answer: string;
+  source: string;
+}

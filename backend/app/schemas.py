@@ -91,3 +91,18 @@ class SkillMatchResult(BaseModel):
     matched_preferred: list[str] = Field(default_factory=list)
     missing_preferred: list[str] = Field(default_factory=list)
     formula_note: str
+
+
+class AssistantRequest(BaseModel):
+    question: str = Field(
+        min_length=3,
+        max_length=500,
+        description="Pertanyaan atau topik bantuan terkait lowongan dan profil kandidat.",
+    )
+
+
+class AssistantResponse(BaseModel):
+    job_id: int
+    question: str
+    answer: str
+    source: str

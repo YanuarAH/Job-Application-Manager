@@ -74,3 +74,48 @@ def test_skill_matching_and_gap_analysis(
     assert match_data["missing_required"] == ["PostgreSQL", "Redis"]
     assert match_data["matched_preferred"] == ["Docker"]
     assert match_data["missing_preferred"] == ["Kubernetes"]
+
+
+def test_contextual_ai_assistant_fallback(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "gemini_api_key", None)
+
+    client.put(
+        "/profile",
+        json={
+            "full_name": "Yanuar",
+            "headline": "AI Engineer",
+            "skills": ["Python", "FastAPI"],
+        },
+    )
+
+    create_res = client.post(
+        "/jobs",
+        json={
+            "company_name": "VisionTech",
+            "job_title": "ML Engineer",
+            "job_description": "Required: Python, PyTorch, Docker.",
+        },
+    )
+    job_id = create_res.json()["id"]
+
+    res = client.post(
+        f"/jobs/{job_id}/assistant",
+        json={
+            "question": "Apa pertanyaan interview teknis yang perlu saya siapkan?"
+        },
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["job_id"] == job_id
+    assert data["source"] == "rule_based"
+    assert "VisionTech" in data["answer"]
+    assert "PyTorch" in data["answer"]
+
+    # Tidak ditemukan -> 404
+    not_found = client.post(
+        "/jobs/999/assistant",
+        json={"question": "Pertanyaan valid"},
+    )
+    assert not_found.status_code == 404

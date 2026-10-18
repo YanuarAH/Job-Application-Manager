@@ -1,4 +1,9 @@
-import type { Job, JobCreate, JobUpdate } from "../types/job";
+import type {
+  AssistantResponse,
+  Job,
+  JobCreate,
+  JobUpdate,
+} from "../types/job";
 import { request } from "./client";
 
 export function listJobs() {
@@ -26,6 +31,13 @@ export function updateJob(id: number, payload: JobUpdate) {
 export function analyzeJob(id: number) {
   return request<Job>(`/jobs/${id}/analyze`, {
     method: "POST",
+  });
+}
+
+export function askJobAssistant(id: number, question: string) {
+  return request<AssistantResponse>(`/jobs/${id}/assistant`, {
+    method: "POST",
+    body: JSON.stringify({ question }),
   });
 }
 

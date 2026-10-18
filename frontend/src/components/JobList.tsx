@@ -1,7 +1,10 @@
 import { useState } from "react";
+import type { FormEvent } from "react";
+import { askJobAssistant } from "../api/jobs";
 import {
   APPLICATION_STATUSES,
   type ApplicationStatus,
+  type AssistantResponse,
   type Job,
 } from "../types/job";
 import { calculateSkillMatch } from "../utils/matcher";
@@ -16,6 +19,24 @@ interface JobListProps {
   onAnalyze: (job: Job) => Promise<void>;
   onDelete: (job: Job) => Promise<void>;
 }
+
+const QUICK_PROMPTS = [
+  {
+    label: "Pertanyaan Interview",
+    question:
+      "Berikan 5 prediksi pertanyaan interview teknis beserta poin jawaban kunci berdasarkan lowongan ini dan skill saya.",
+  },
+  {
+    label: "Rencana Tutup Skill Gap",
+    question:
+      "Buatkan roadmap belajar singkat 7 hari dan ide mini-project untuk menutup skill gap wajib saya pada lowongan ini.",
+  },
+  {
+    label: "Tips Tonjolkan CV",
+    question:
+      "Bagaimana cara menyesuaikan bullet points CV saya agar menonjol untuk lowongan ini?",
+  },
+];
 
 function getScoreTier(score: number): "high" | "medium" | "low" {
   if (score >= 75) return "high";
@@ -38,6 +59,20 @@ function JobList({
   const [analyzingId, setAnalyzingId] = useState<number | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
+  const [openAssistantId, setOpenAssistantId] = useState<number | null>(null);
+  const [customQuestions, setCustomQuestions] = useState<Record<number, string>>(
+    {},
+  );
+  const [assistantLoadingId, setAssistantLoadingId] = useState<number | null>(
+    null,
+  );
+  const [assistantReplies, setAssistantReplies] = useState<
+    Record<number, AssistantResponse>
+  >({});
+  const [assistantError, setAssistantError] = useState<Record<number, string>>(
+    {},
+  );
+
   async function handleStatusChange(job: Job, nextStatus: ApplicationStatus) {
     setUpdatingStatusId(job.id);
     try {
@@ -54,6 +89,34 @@ function JobList({
     } finally {
       setAnalyzingId(null);
     }
+  }
+
+  async function handleAskAssistant(job: Job, questionText: string) {
+    const trimmed = questionText.trim();
+    if (trimmed.length < 3) return;
+
+    setAssistantLoadingId(job.id);
+    setAssistantError((prev) => ({ ...prev, [job.id]: "" }));
+    try {
+      const response = await askJobAssistant(job.id, trimmed);
+      setAssistantReplies((prev) => ({ ...prev, [job.id]: response }));
+    } catch (err) {
+      setAssistantError((prev) => ({
+        ...prev,
+        [job.id]:
+          err instanceof Error
+            ? err.message
+            : "Gagal meminta saran AI Assistant.",
+      }));
+    } finally {
+      setAssistantLoadingId(null);
+    }
+  }
+
+  function handleCustomSubmit(event: FormEvent<HTMLFormElement>, job: Job) {
+    event.preventDefault();
+    const q = customQuestions[job.id] ?? "";
+    handleAskAssistant(job, q);
   }
 
   async function handleDelete(job: Job) {
@@ -96,6 +159,10 @@ function JobList({
           : null;
         const scoreTier = match ? getScoreTier(match.match_score) : "low";
         const currentStatus = job.application_status ?? "Saved";
+        const isAssistantOpen = openAssistantId === job.id;
+        const isAsking = assistantLoadingId === job.id;
+        const reply = assistantReplies[job.id];
+        const askErr = assistantError[job.id];
 
         return (
           <li
@@ -144,6 +211,15 @@ function JobList({
                     : hasAnalysis
                       ? "Analisis Ulang"
                       : "Analyze with AI"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-small btn-secondary"
+                  onClick={() =>
+                    setOpenAssistantId(isAssistantOpen ? null : job.id)
+                  }
+                >
+                  {isAssistantOpen ? "Tutup Assistant" : "AI Assistant"}
                 </button>
                 <button
                   type="button"
@@ -277,6 +353,76 @@ function JobList({
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {isAssistantOpen && (
+              <div className="assistant-panel">
+                <div className="analysis-header">
+                  <span className="analysis-title">
+                    Contextual AI Career & Interview Assistant
+                  </span>
+                  {reply && (
+                    <span className="badge badge-source">
+                      {reply.source === "gemini" ? "Gemini AI" : "Rule-Based"}
+                    </span>
+                  )}
+                </div>
+
+                <p className="assistant-hint">
+                  Pilih topik persiapan cepat atau ketik pertanyaan spesifik
+                  untuk posisi <strong>{job.job_title}</strong> di{" "}
+                  <strong>{job.company_name}</strong>:
+                </p>
+
+                <div className="quick-prompts">
+                  {QUICK_PROMPTS.map((item) => (
+                    <button
+                      key={item.label}
+                      type="button"
+                      className="btn btn-small btn-ai"
+                      disabled={isAsking}
+                      onClick={() => handleAskAssistant(job, item.question)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+
+                <form
+                  className="assistant-form"
+                  onSubmit={(e) => handleCustomSubmit(e, job)}
+                >
+                  <input
+                    type="text"
+                    placeholder="Tanyakan sesuatu (mis: Apa topik live coding yang mungkin keluar?)..."
+                    value={customQuestions[job.id] ?? ""}
+                    onChange={(e) =>
+                      setCustomQuestions((prev) => ({
+                        ...prev,
+                        [job.id]: e.target.value,
+                      }))
+                    }
+                  />
+                  <button
+                    type="submit"
+                    className="btn btn-small btn-primary"
+                    disabled={isAsking}
+                  >
+                    {isAsking ? "Memproses..." : "Tanya AI"}
+                  </button>
+                </form>
+
+                {askErr && <p className="form-error">{askErr}</p>}
+
+                {reply && (
+                  <div className="assistant-answer">
+                    <div className="assistant-question">
+                      Pertanyaan: "{reply.question}"
+                    </div>
+                    <div className="assistant-markdown">{reply.answer}</div>
+                  </div>
+                )}
               </div>
             )}
           </li>

@@ -649,6 +649,74 @@ h3 {
   color: #5b21b6;
 }
 
+/* AI Assistant Panel */
+.assistant-panel {
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid #ddd6fe;
+  border-radius: 12px;
+  background: #faf5ff;
+}
+
+.assistant-hint {
+  margin: 0 0 10px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.quick-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.assistant-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.assistant-form input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 13px;
+  background: white;
+  color: #172033;
+}
+
+.assistant-form input:focus {
+  outline: none;
+  border-color: #4f46e5;
+}
+
+.assistant-answer {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+}
+
+.assistant-question {
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.assistant-markdown {
+  font-size: 13.5px;
+  line-height: 1.65;
+  color: #1e293b;
+  white-space: pre-wrap;
+}
+
 .empty-state {
   padding: 40px 24px;
   border: 1px dashed #cbd5e1;

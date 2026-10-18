@@ -7,12 +7,15 @@ from app.models import Job
 from app.routers.profile import get_or_create_profile
 from app.schemas import (
     ApplicationStatus,
+    AssistantRequest,
+    AssistantResponse,
     JobCreate,
     JobResponse,
     JobUpdate,
     SkillMatchResult,
 )
 from app.services.analyzer import analyze_job_description
+from app.services.assistant import generate_career_advice
 from app.services.matcher import calculate_skill_match
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -134,6 +137,58 @@ def match_job_skills(job_id: int, db: Session = Depends(get_db)):
         candidate_skills=profile.skills or [],
         required_skills=job.required_skills,
         preferred_skills=job.preferred_skills,
+    )
+
+
+@router.post("/{job_id}/assistant", response_model=AssistantResponse)
+def ask_job_assistant(
+    job_id: int,
+    payload: AssistantRequest,
+    db: Session = Depends(get_db),
+):
+    job = db.get(Job, job_id)
+
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    # Jika job belum dianalisis, jalankan analisis otomatis terlebih dahulu
+    if job.required_skills is None and job.preferred_skills is None:
+        result, source = analyze_job_description(
+            job_title=job.job_title,
+            company_name=job.company_name,
+            job_description=job.job_description,
+        )
+        job.required_skills = result.required_skills
+        job.preferred_skills = result.preferred_skills
+        job.experience_level = result.experience_level
+        job.summary = result.summary
+        job.analysis_source = source
+        db.commit()
+        db.refresh(job)
+
+    profile = get_or_create_profile(db)
+    match = calculate_skill_match(
+        job_id=job.id,
+        candidate_skills=profile.skills or [],
+        required_skills=job.required_skills,
+        preferred_skills=job.preferred_skills,
+    )
+
+    answer, source = generate_career_advice(
+        job=job,
+        profile=profile,
+        match=match,
+        question=payload.question,
+    )
+
+    return AssistantResponse(
+        job_id=job.id,
+        question=payload.question.strip(),
+        answer=answer,
+        source=source,
     )
 
 
