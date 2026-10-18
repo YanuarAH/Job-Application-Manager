@@ -1,8 +1,20 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import { getHealth } from "./api/client";
+import {
+  getCurrentUser,
+  resetSampleData,
+  type AuthTokenResponse,
+  type AuthUser,
+} from "./api/auth";
+import {
+  clearAuthToken,
+  getAuthToken,
+  getHealth,
+  setAuthToken,
+} from "./api/client";
 import * as jobsApi from "./api/jobs";
 import * as profileApi from "./api/profile";
+import AuthScreen from "./components/AuthScreen";
 import CareerAssistant from "./components/CareerAssistant";
 import JobForm from "./components/JobForm";
 import JobList from "./components/JobList";
@@ -23,6 +35,11 @@ type ActiveTab = "jobs" | "assistant" | "profile";
 type SortMode = "newest" | "match_desc";
 
 function App() {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(
+    () => Boolean(getAuthToken()),
+  );
+
   const [activeTab, setActiveTab] = useState<ActiveTab>("jobs");
   const [status, setStatus] = useState("Memeriksa...");
   const [isConnected, setIsConnected] = useState(false);
@@ -37,6 +54,7 @@ function App() {
   const [isFormOpen, setIsFormOpen] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isResettingDemo, setIsResettingDemo] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingJob, setEditingJob] = useState<Job | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -59,9 +77,13 @@ function App() {
       })
       .finally(() => setIsLoading(false));
 
-  const loadJobs = () => {
+  const loadWorkspaceData = () => {
     setIsLoading(true);
     setError(null);
+    profileApi
+      .getProfile()
+      .then((data) => setProfile(data))
+      .catch(() => {});
     applyJobsResult(jobsApi.listJobs());
   };
 
@@ -76,24 +98,62 @@ function App() {
         setIsConnected(false);
       });
 
-    profileApi
-      .getProfile()
-      .then((data) => setProfile(data))
-      .catch(() => {});
+    const token = getAuthToken();
+    if (!token) {
+      setIsCheckingAuth(false);
+      return;
+    }
 
-    jobsApi
-      .listJobs()
-      .then((data) => {
-        setJobs(data);
-        setError(null);
+    getCurrentUser()
+      .then((user) => {
+        setCurrentUser(user);
       })
-      .catch((err: unknown) => {
-        setError(
-          err instanceof Error ? err.message : "Gagal memuat data job.",
-        );
+      .catch(() => {
+        clearAuthToken();
+        setCurrentUser(null);
       })
-      .finally(() => setIsLoading(false));
+      .finally(() => {
+        setIsCheckingAuth(false);
+      });
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    loadWorkspaceData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
+
+  function handleAuthSuccess(auth: AuthTokenResponse) {
+    setAuthToken(auth.access_token);
+    setCurrentUser(auth.user);
+    setActiveTab("jobs");
+    showNotice(`Selamat datang, ${auth.user.full_name}!`);
+  }
+
+  function handleLogout() {
+    clearAuthToken();
+    setCurrentUser(null);
+    setProfile(null);
+    setJobs([]);
+    setEditingJob(null);
+    setIsFormOpen(false);
+  }
+
+  async function handleResetSampleData() {
+    setIsResettingDemo(true);
+    setError(null);
+    try {
+      await resetSampleData();
+      loadWorkspaceData();
+      showNotice("Data contoh & profil berhasil direset ke kondisi awal.");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Gagal mereset data contoh.",
+      );
+    } finally {
+      setIsResettingDemo(false);
+    }
+  }
 
   async function handleSaveProfile(payload: CandidateProfileUpdate) {
     const updated = await profileApi.updateProfile(payload);
@@ -156,6 +216,18 @@ function App() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menghapus job.");
     }
+  }
+
+  if (isCheckingAuth) {
+    return (
+      <div className="auth-loading">
+        <p>Memuat sesi akun Anda...</p>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <AuthScreen onSuccess={handleAuthSuccess} />;
   }
 
   const candidateSkills = profile?.skills ?? [];
@@ -265,9 +337,40 @@ function App() {
             </button>
           </nav>
 
-          <div className="status-pill">
-            <span className={`dot ${isConnected ? "success" : "pending"}`} />
-            API: <strong>{status}</strong>
+          <div className="topbar-right">
+            <div className="user-pill">
+              <span className="user-name">{currentUser.full_name}</span>
+              <span
+                className={`user-role-badge ${currentUser.is_demo ? "demo" : "personal"}`}
+              >
+                {currentUser.is_demo ? "Akun Demo" : "Akun Pribadi"}
+              </span>
+            </div>
+
+            {currentUser.is_demo && (
+              <button
+                type="button"
+                className="btn btn-small btn-secondary"
+                disabled={isResettingDemo}
+                onClick={handleResetSampleData}
+                title="Kembalikan 6 lowongan dan skill contoh awal"
+              >
+                {isResettingDemo ? "Mereset..." : "Reset Demo"}
+              </button>
+            )}
+
+            <button
+              type="button"
+              className="btn btn-small btn-secondary"
+              onClick={handleLogout}
+            >
+              Keluar
+            </button>
+
+            <div className="status-pill">
+              <span className={`dot ${isConnected ? "success" : "pending"}`} />
+              API: <strong>{status}</strong>
+            </div>
           </div>
         </div>
       </header>
@@ -354,7 +457,7 @@ function App() {
                 <button
                   type="button"
                   className="btn btn-small btn-secondary"
-                  onClick={loadJobs}
+                  onClick={loadWorkspaceData}
                   disabled={isLoading}
                 >
                   Refresh
@@ -394,7 +497,7 @@ function App() {
                 <button
                   type="button"
                   className="link-button"
-                  onClick={loadJobs}
+                  onClick={loadWorkspaceData}
                 >
                   Coba lagi
                 </button>

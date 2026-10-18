@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import {
+  clearChatHistory,
+  getChatHistory,
   sendCareerChat,
   type CareerChatMessage,
 } from "../api/assistant";
@@ -39,18 +41,52 @@ const STARTER_PROMPTS = [
 function CareerAssistant({ profile, jobs }: CareerAssistantProps) {
   const candidateSkills = profile?.skills ?? [];
 
-  const [messages, setMessages] = useState<CareerChatMessage[]>([
-    {
+  function getWelcomeMessage(): CareerChatMessage {
+    return {
       role: "assistant",
       content:
         `Halo ${profile?.full_name || "Rekan"}! Saya adalah AI Career Assistant Anda.\n\n` +
-        `Saya sudah membaca profil Anda (${candidateSkills.length} skill) beserta seluruh ${jobs.length} lowongan kerja yang Anda lacak di aplikasi ini. ` +
-        `Silakan pilih topik konsultasi di bawah atau tanyakan apa saja terkait pemilihan karier, prioritas lamaran, maupun strategi menutup skill gap.`,
-    },
+        `Saya sudah membaca profil Anda (${candidateSkills.length} skill) beserta seluruh ${jobs.length} lowongan kerja yang Anda lacak di akun ini. ` +
+        `Riwayat obrolan Anda otomatis tersimpan di akun Anda. Silakan pilih topik konsultasi di bawah atau tanyakan apa saja terkait pemilihan karier, prioritas lamaran, maupun strategi menutup skill gap.`,
+    };
+  }
+
+  const [messages, setMessages] = useState<CareerChatMessage[]>([
+    getWelcomeMessage(),
   ]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadHistory() {
+      setIsLoadingHistory(true);
+      try {
+        const saved = await getChatHistory();
+        if (!active) return;
+        if (saved.length > 0) {
+          setMessages([getWelcomeMessage(), ...saved]);
+        } else {
+          setMessages([getWelcomeMessage()]);
+        }
+      } catch {
+        if (active) {
+          setMessages([getWelcomeMessage()]);
+        }
+      } finally {
+        if (active) {
+          setIsLoadingHistory(false);
+        }
+      }
+    }
+    loadHistory();
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.id]);
 
   // Hitung insight lintas lowongan untuk sidebar konteks
   const analyzedJobsWithScore = jobs
@@ -106,6 +142,26 @@ function CareerAssistant({ profile, jobs }: CareerAssistantProps) {
       );
     } finally {
       setIsSending(false);
+    }
+  }
+
+  async function handleResetChat() {
+    setError(null);
+    try {
+      await clearChatHistory();
+      setMessages([
+        {
+          role: "assistant",
+          content:
+            "Riwayat percakapan di akun Anda telah dibersihkan. Silakan pilih topik konsultasi karier atau ketik pertanyaan baru Anda.",
+        },
+      ]);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Gagal menghapus riwayat percakapan.",
+      );
     }
   }
 
@@ -182,23 +238,16 @@ function CareerAssistant({ profile, jobs }: CareerAssistantProps) {
             <h2>AI Career & Role Advisor</h2>
             <p>
               Konsultasi pemilihan karier, prioritas lamaran, dan strategi
-              belajar berdasarkan seluruh portofolio lowongan Anda.
+              belajar (riwayat chat otomatis tersimpan di akun Anda).
             </p>
           </div>
           <button
             type="button"
             className="btn btn-small btn-secondary"
-            onClick={() =>
-              setMessages([
-                {
-                  role: "assistant",
-                  content:
-                    "Percakapan direset. Silakan pilih topik konsultasi karier atau ketik pertanyaan baru Anda.",
-                },
-              ])
-            }
+            disabled={isSending || isLoadingHistory}
+            onClick={handleResetChat}
           >
-            Reset Chat
+            Hapus Riwayat Chat
           </button>
         </div>
 
@@ -208,7 +257,7 @@ function CareerAssistant({ profile, jobs }: CareerAssistantProps) {
               key={item.title}
               type="button"
               className="starter-chip"
-              disabled={isSending}
+              disabled={isSending || isLoadingHistory}
               onClick={() => handleSend(item.prompt)}
             >
               <strong>{item.title}</strong>
@@ -256,14 +305,14 @@ function CareerAssistant({ profile, jobs }: CareerAssistantProps) {
           <input
             type="text"
             value={input}
-            disabled={isSending}
+            disabled={isSending || isLoadingHistory}
             placeholder="Tanyakan seputar pemilihan karier, perbandingan lowongan, atau persiapan interview..."
             onChange={(e) => setInput(e.target.value)}
           />
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSending || input.trim().length < 2}
+            disabled={isSending || isLoadingHistory || input.trim().length < 2}
           >
             {isSending ? "Mengirim..." : "Kirim"}
           </button>

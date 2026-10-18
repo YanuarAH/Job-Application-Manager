@@ -110,7 +110,8 @@ class AssistantResponse(BaseModel):
 
 class CareerChatMessage(BaseModel):
     role: Literal["user", "assistant"]
-    content: str = Field(min_length=1, max_length=4000)
+    content: str = Field(min_length=1, max_length=25000)
+    source: str | None = None
 
 
 class CareerChatRequest(BaseModel):
@@ -125,3 +126,30 @@ class CareerChatRequest(BaseModel):
 class CareerChatResponse(BaseModel):
     reply: str
     source: str
+
+
+class UserRegister(BaseModel):
+    email: str = Field(min_length=3, max_length=150)
+    password: str = Field(min_length=6, max_length=128)
+    full_name: str = Field(min_length=1, max_length=150)
+    seed_sample_jobs: bool = True
+
+
+class UserLogin(BaseModel):
+    email: str = Field(min_length=3, max_length=150)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    full_name: str
+    is_demo: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AuthTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse

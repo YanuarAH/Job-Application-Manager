@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     )
     gemini_api_key: str | None = None
     gemini_model: str = "gemini-flash-lite-latest"
+    jwt_secret: str = "job-application-manager-portfolio-secret-key-2026"
+    jwt_expire_minutes: int = 60 * 24 * 7  # 7 hari
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent.parent / ".env",

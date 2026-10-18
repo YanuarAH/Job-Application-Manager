@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Job
+from app.models import Job, User
 from app.routers.profile import get_or_create_profile
 from app.schemas import (
     ApplicationStatus,
@@ -16,9 +16,30 @@ from app.schemas import (
 )
 from app.services.analyzer import analyze_job_description
 from app.services.assistant import generate_career_advice
+from app.services.auth import get_current_user_optional
 from app.services.matcher import calculate_skill_match
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _get_user_job(
+    db: Session,
+    job_id: int,
+    user_id: int | None,
+) -> Job:
+    stmt = select(Job).where(Job.id == job_id)
+    if user_id is None:
+        stmt = stmt.where(Job.user_id.is_(None))
+    else:
+        stmt = stmt.where(Job.user_id == user_id)
+
+    job = db.scalars(stmt).first()
+    if job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+    return job
 
 
 @router.post(
@@ -28,9 +49,11 @@ router = APIRouter(prefix="/jobs", tags=["jobs"])
 )
 def create_job(
     payload: JobCreate,
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    job = Job(**payload.model_dump())
+    user_id = current_user.id if current_user else None
+    job = Job(user_id=user_id, **payload.model_dump())
     db.add(job)
     db.commit()
     db.refresh(job)
@@ -40,9 +63,15 @@ def create_job(
 @router.get("", response_model=list[JobResponse])
 def list_jobs(
     status_filter: ApplicationStatus | None = None,
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    statement = select(Job)
+    user_id = current_user.id if current_user else None
+    statement = (
+        select(Job).where(Job.user_id.is_(None))
+        if user_id is None
+        else select(Job).where(Job.user_id == user_id)
+    )
     if status_filter is not None:
         statement = statement.where(Job.application_status == status_filter)
     statement = statement.order_by(Job.id.desc())
@@ -50,31 +79,24 @@ def list_jobs(
 
 
 @router.get("/{job_id}", response_model=JobResponse)
-def get_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(Job, job_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found",
-        )
-
-    return job
+def get_job(
+    job_id: int,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user.id if current_user else None
+    return _get_user_job(db, job_id, user_id)
 
 
 @router.patch("/{job_id}", response_model=JobResponse)
 def update_job(
     job_id: int,
     payload: JobUpdate,
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    job = db.get(Job, job_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found",
-        )
+    user_id = current_user.id if current_user else None
+    job = _get_user_job(db, job_id, user_id)
 
     updates = payload.model_dump(exclude_unset=True)
 
@@ -89,14 +111,13 @@ def update_job(
 
 
 @router.post("/{job_id}/analyze", response_model=JobResponse)
-def analyze_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(Job, job_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found",
-        )
+def analyze_job(
+    job_id: int,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user.id if current_user else None
+    job = _get_user_job(db, job_id, user_id)
 
     result, source = analyze_job_description(
         job_title=job.job_title,
@@ -116,14 +137,13 @@ def analyze_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{job_id}/match", response_model=SkillMatchResult)
-def match_job_skills(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(Job, job_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found",
-        )
+def match_job_skills(
+    job_id: int,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user.id if current_user else None
+    job = _get_user_job(db, job_id, user_id)
 
     if job.required_skills is None and job.preferred_skills is None:
         raise HTTPException(
@@ -131,7 +151,7 @@ def match_job_skills(job_id: int, db: Session = Depends(get_db)):
             detail="Job belum dianalisis. Jalankan analisis AI terlebih dahulu.",
         )
 
-    profile = get_or_create_profile(db)
+    profile = get_or_create_profile(db, user_id=user_id)
     return calculate_skill_match(
         job_id=job.id,
         candidate_skills=profile.skills or [],
@@ -144,17 +164,12 @@ def match_job_skills(job_id: int, db: Session = Depends(get_db)):
 def ask_job_assistant(
     job_id: int,
     payload: AssistantRequest,
+    current_user: User | None = Depends(get_current_user_optional),
     db: Session = Depends(get_db),
 ):
-    job = db.get(Job, job_id)
+    user_id = current_user.id if current_user else None
+    job = _get_user_job(db, job_id, user_id)
 
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found",
-        )
-
-    # Jika job belum dianalisis, jalankan analisis otomatis terlebih dahulu
     if job.required_skills is None and job.preferred_skills is None:
         result, source = analyze_job_description(
             job_title=job.job_title,
@@ -169,7 +184,7 @@ def ask_job_assistant(
         db.commit()
         db.refresh(job)
 
-    profile = get_or_create_profile(db)
+    profile = get_or_create_profile(db, user_id=user_id)
     match = calculate_skill_match(
         job_id=job.id,
         candidate_skills=profile.skills or [],
@@ -193,14 +208,13 @@ def ask_job_assistant(
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(Job, job_id)
-
-    if job is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Job not found",
-        )
+def delete_job(
+    job_id: int,
+    current_user: User | None = Depends(get_current_user_optional),
+    db: Session = Depends(get_db),
+):
+    user_id = current_user.id if current_user else None
+    job = _get_user_job(db, job_id, user_id)
 
     db.delete(job)
     db.commit()

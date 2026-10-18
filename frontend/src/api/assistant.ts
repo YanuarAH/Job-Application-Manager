@@ -11,6 +11,16 @@ export interface CareerChatResponse {
   source: string;
 }
 
+export function getChatHistory() {
+  return request<CareerChatMessage[]>("/assistant/history");
+}
+
+export function clearChatHistory() {
+  return request<void>("/assistant/history", {
+    method: "DELETE",
+  });
+}
+
 export function sendCareerChat(
   message: string,
   history: CareerChatMessage[],
